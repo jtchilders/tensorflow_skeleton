@@ -1,5 +1,5 @@
 import tensorflow as tf
-import time,logging,glob
+import logging
 import numpy as np
 logger = logging.getLogger(__name__)
 
@@ -35,8 +35,6 @@ def load_file_and_preprocess(path):
    img_shape = [config['data']['imgs_per_file']] + config['data']['image_shape']
    images = np.random.randn(*img_shape)
    labels = np.random.randint(config['data']['imgs_per_file'])
-
-   
 
    # could do some preprocessing here
    #logger.info('returning %s, %s',images,labels)
