@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import argparse,logging,json,time
+import argparse,logging,json,time,os
 import tensorflow as tf
 import data_handler
 import horovod
@@ -8,6 +8,8 @@ hvd.init()
 logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIG = 'config.json'
+DEFAULT_INTEROP = 1
+DEFAULT_INTRAOP = os.cpu_count()
 
 
 def main():
@@ -18,6 +20,8 @@ def main():
    
    parser = argparse.ArgumentParser(description='')
    parser.add_argument('-c','--config',dest='config_filename',help='configuration filename in json format [default: %s]' % DEFAULT_CONFIG,default=DEFAULT_CONFIG)
+   parser.add_argument('--interop',help='set Tensorflow "inter_op_parallelism_threads" session config varaible [default: %s]' % DEFAULT_INTEROP,default=DEFAULT_INTEROP)
+   parser.add_argument('--intraop',help='set Tensorflow "intra_op_parallelism_threads" session config varaible [default: %s]' % DEFAULT_INTRAOP,default=DEFAULT_INTRAOP)
 
    parser.add_argument('--debug', dest='debug', default=False, action='store_true', help="Set Logger to DEBUG")
    parser.add_argument('--error', dest='error', default=False, action='store_true', help="Set Logger to ERROR")
@@ -57,8 +61,13 @@ def main():
 
    logger.info('create session')
 
+   config = tf.ConfigProto()
+   config.allow_soft_placement = True
+   config.intra_op_parallelism_threads = args.intraop
+   config.inter_op_parallelism_threads = args.interop
+
    # Initialize an iterator over a dataset with 10 elements.
-   sess = tf.Session()
+   sess = tf.Session(config=config)
    logger.info('initialize dataset iterator')
    sess.run(train_itr.initializer)
    logger.info('running over data')
