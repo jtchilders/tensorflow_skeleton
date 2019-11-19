@@ -1,14 +1,16 @@
 import logging
 logger = logging.getLogger('data_handler')
 
+__all__ = ['random_file_generator','h5_file_generator','csv_file_generator']
+from . import random_file_generator,h5_file_generator,csv_file_generator
+
 def get_datasets(config):
 
-   if 'random_file_generator' in config['data']['handler']:
+   if config['data']['handler'] in globals():
       logger.info('using data handler %s',config['data']['handler'])
-      import data_handler.random_file_generator as handler
-   elif 'h5_file_generator' in config['data']['handler']:
-      logger.info('using data handler %s',config['data']['handler'])
-      import data_handler.h5_file_generator as handler
+      handler = globals()[config['data']['handler']]
+   else:
+      raise Exception('failed to find data handler %s in globals %s' % (config['data']['handler'],globals()))
 
    return handler.get_datasets(config)
 
