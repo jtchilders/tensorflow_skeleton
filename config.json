@@ -1,25 +1,35 @@
 {
    "model": {
-      "model":                         "data_loading_test"
+      "name":                         "dummy"
    },
    "optimizer": {
       "name":                          "adam",
-      "lr":                            0.001,
-      "lrsched":                       "StepLR",
-      "lrsched_step_size":             2,
-      "lrsched_gamma":                 0.5
+      "learning_rate":                 0.001
+   },
+   "learning_rate": {
+      "name":                          "cyclic_learning_rate",
+      "cyclic_learning_rate": {
+         "learning_rate":              0.00001,
+         "max_lr":                     0.01,
+         "step_size":                  200,
+         "gamma":                      0.99994,
+         "mode":                       "triangular2"
+      }
    },
    "loss": {
-      "func":                          "pointnet_class_loss"
-
+      "name":                          "sparse_softmax_cross_entropy_with_logits"
+   },
+   "accuracy": {
+      "name":                          "simple_class_accuracy"
    },
    "data": {
-      "handler":                       "h5_file_generator",
+      "handler":                       "random_file_generator",
       "batch_size":                    20,
       "train_glob":                    "/Users/jchilders/workdir/ml_data/atlas/h5_data/zee2jets/train/*",
       "valid_glob":                    "/Users/jchilders/workdir/ml_data/atlas/h5_data/zee2jets/valid/*",
       "imgs_per_file":                 1,
       "image_shape":                   [10,10],
+      "channels":                      3,
       "total_images":                  1000,
       "shuffle_on_epoch":              true,
       "classes":                       ["classA","classB"],
@@ -28,7 +38,8 @@
       "prefectch_buffer_size":         40
    },
    "training": {
-      "epochs":                        100
+      "epochs":                        100,
+      "status":                        5
    },
    "validation": {
       "batches":                       1

@@ -20,22 +20,33 @@ def simple_dataset_from_glob(glob_string):
 
    # glob for the input files
    filelist = tf.data.Dataset.list_files(glob_string)
+   filelist = filelist.shuffle(10000)
    # parallel_interleave will allow files to be loaded in parallel
-   ds = filelist.apply(tf.contrib.data.parallel_interleave(load_file_and_preprocess, cycle_length=config['data']['num_parallel_readers']))
+   ds = filelist.map(wrapped_load_file_and_preprocess, num_parallel_calls=config['data']['num_parallel_readers'])
+   # flatten the inputs across file boundaries
+   ds = ds.flat_map(lambda *x: tf.data.Dataset.from_tensor_slices(x))
+
    # shuffle the images and repeat in a performant way
-   ds = ds.apply(tf.contrib.data.shuffle_and_repeat(buffer_size=10000,count=config['training']['epochs']))
-   ds = ds.batch(config['data']['batch_size'])
+   ds = ds.batch(config['data']['batch_size'],drop_remainder=True)
+   # shard the data
+   ds = ds.shard(config['hvd'].size(),config['hvd'].rank())
+   # how many inputs to prefetch to improve pipeline performance
    ds = ds.prefetch(buffer_size=config['data']['prefectch_buffer_size'])
    return ds
+
+
+def wrapped_load_file_and_preprocess(path):
+   pyf = tf.py_function(load_file_and_preprocess,[path],(tf.float32,tf.int32))
+   return pyf
 
 
 def load_file_and_preprocess(path):
    logger.info('parsing %s',path)
 
-   img_shape = [config['data']['imgs_per_file']] + config['data']['image_shape']
-   images = np.random.randn(*img_shape)
-   labels = np.random.randint(config['data']['imgs_per_file'])
+   img_shape = config['data']['image_shape'] + [config['data']['channels']]
+   images = np.float32(np.random.randn(*img_shape))  # HxWxC
+   labels = np.random.randint(len(config['data']['classes']))
 
    # could do some preprocessing here
-   #logger.info('returning %s, %s',images,labels)
-   return tf.data.Dataset.from_tensors((images,labels))
+   logger.info('returning %s, %s',images.shape,labels)
+   return (images,labels)  # (HxWxC,1)
