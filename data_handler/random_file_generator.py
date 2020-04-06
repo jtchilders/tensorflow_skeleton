@@ -29,7 +29,8 @@ def simple_dataset_from_glob(glob_string):
    # shuffle the images and repeat in a performant way
    ds = ds.batch(config['data']['batch_size'],drop_remainder=True)
    # shard the data
-   ds = ds.shard(config['hvd'].size(),config['hvd'].rank())
+   if config['hvd']:
+      ds = ds.shard(config['hvd'].size(),config['hvd'].rank())
    # how many inputs to prefetch to improve pipeline performance
    ds = ds.prefetch(buffer_size=config['data']['prefectch_buffer_size'])
    return ds

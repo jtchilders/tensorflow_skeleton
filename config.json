@@ -1,6 +1,6 @@
 {
    "model": {
-      "name":                         "dummy"
+      "name":                         "mnist"
    },
    "optimizer": {
       "name":                          "adam",
@@ -17,14 +17,17 @@
       }
    },
    "loss": {
-      "name":                          "sparse_softmax_cross_entropy_with_logits"
+      "name":                          "SparseCategoricalCrossentropy",
+      "args": {
+         "from_logits":                true
+      }
    },
    "accuracy": {
       "name":                          "simple_class_accuracy"
    },
    "data": {
-      "handler":                       "random_file_generator",
-      "batch_size":                    20,
+      "handler":                       "mnist_dataset",
+      "batch_size":                    32,
       "train_glob":                    "/Users/jchilders/workdir/ml_data/atlas/h5_data/zee2jets/train/*",
       "valid_glob":                    "/Users/jchilders/workdir/ml_data/atlas/h5_data/zee2jets/valid/*",
       "imgs_per_file":                 1,
@@ -39,7 +42,7 @@
    },
    "training": {
       "epochs":                        100,
-      "status":                        5
+      "status":                        25
    },
    "validation": {
       "batches":                       1

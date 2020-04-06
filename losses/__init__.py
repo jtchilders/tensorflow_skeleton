@@ -11,7 +11,11 @@ def get_loss(config):
    if loss_name in globals():
       logger.info('using loss name %s',loss_name)
       return globals()[loss_name]
-   elif hasattr(tf.nn,loss_name):
-      return getattr(tf.nn,loss_name)
+   elif hasattr(tf.keras.losses,loss_name):
+      if 'args' in config['loss']:
+         logging.info('passing args to loss function: %s',config['loss']['args'])
+         return getattr(tf.keras.losses, loss_name)(**config['loss']['args'])
+      else:
+         return getattr(tf.keras.losses,loss_name)()
    else:
-      raise Exception('failed to find data handler %s in globals %s' % (loss_name,globals()))
+      raise Exception('failed to find loss function %s' % loss_name)
