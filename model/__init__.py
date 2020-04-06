@@ -1,8 +1,8 @@
 import logging
 logger = logging.getLogger('model')
 
-__all__ = ['dummy']
-from . import dummy
+__all__ = ['mnist']
+from . import mnist
 
 
 def get_model(config):
