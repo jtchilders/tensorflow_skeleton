@@ -10,6 +10,6 @@ def get_model(config):
       logger.info('using model name %s',config['model']['name'])
       model = globals()[config['model']['name']]
    else:
-      raise Exception('failed to find data handler %s in globals %s' % (config['model']['name'],globals()))
+      raise Exception('failed to find model handler %s ' % config['model']['name'])
 
    return model.get_model(config)
