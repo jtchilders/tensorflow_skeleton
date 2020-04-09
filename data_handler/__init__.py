@@ -1,8 +1,8 @@
 import logging
 logger = logging.getLogger('data_handler')
 
-__all__ = ['random_file_generator','h5_file_generator','csv_file_generator','mnist_dataset']
-from . import random_file_generator,h5_file_generator,csv_file_generator,mnist_dataset
+__all__ = ['random_file_generator','h5_file_generator','csv_file_generator','mnist_dataset','ilsvrc_dataset']
+from . import random_file_generator,h5_file_generator,csv_file_generator,mnist_dataset,ilsvrc_dataset
 
 
 def get_datasets(config):

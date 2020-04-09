@@ -1,5 +1,4 @@
 import tensorflow as tf,logging
-from . import tf_layer_helper as tlh
 logger = logging.getLogger(__name__)
 
 
