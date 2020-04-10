@@ -5,10 +5,13 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 labels_hash = None
+crop_size = None
 def get_datasets(config):
-   global labels_hash
+   global labels_hash,crop_size
 
    base_dir = config['data']['ilsvrc_base_dir']
+
+   crop_size = tf.constant(config['data']['crop_image_size'])
 
    image_path = os.path.join(base_dir,'Data/CLS-LOC')
    assert os.path.exists(image_path), f'{image_path} not found'
@@ -62,7 +65,10 @@ def load_image_and_label(image_path):
    # annot_path = tf.strings.regex_replace(image_path,'Data','Annotation')
    # annot_path = tf.strings.regex_replace(annot_path,'\.JPEG','\.xml')
 
-   return tf.io.read_file(image_path),labels_hash.lookup(label)
+   image = tf.io.read_file(image_path)
+   image = tf.image.crop_and_resize(image,tf.constant([0,1]),tf.constant([0]),crop_size)
+
+   return image,labels_hash.lookup(label)
 
 
 # def parse_xml(filename):
