@@ -8,7 +8,7 @@ labels_hash = None
 crop_size = None
 def get_datasets(config):
    global labels_hash,crop_size
-
+   logger.debug('get dataset')
    base_dir = config['data']['ilsvrc_base_dir']
 
    crop_size = tf.constant(config['data']['crop_image_size'])
@@ -20,6 +20,7 @@ def get_datasets(config):
 
    labels = glob.glob(os.path.join(image_path,'train') + os.path.sep + '*')
    labels = [ os.path.basename(i) for i in labels ]
+   logger.debug(f'num labels: {len(labels)}')
 
    hash_values = tf.range(len(labels))
    hash_keys = tf.constant(labels,dtype=tf.string)
@@ -27,27 +28,31 @@ def get_datasets(config):
    labels_hash_init = tf.lookup.KeyValueTensorInitializer(hash_keys,hash_values)
    labels_hash = tf.lookup.StaticHashTable(labels_hash_init,-1)
 
-   train_ds = build_dataset(config,image_path,'train')
-   valid_ds = build_dataset(config,image_path,'valid')
+   train_ds = build_dataset(config,image_path,'train/*/*.JPEG')
+   valid_ds = build_dataset(config,image_path,'val/*.JPEG')
 
    return train_ds,valid_ds
 
 
-def build_dataset(config,image_path,additional_dir):
+def build_dataset(config,image_path,glob_str):
+   logger.debug(f'build dataset {glob_str}')
 
    dc = config['data']
 
-   image_path = os.path.join(image_path,additional_dir)
-
-   glob_str = image_path + os.path.sep + '*' + os.path.sep + '*'
+   glob_str = os.path.join(image_path,glob_str)
 
    # glob for the input files
    filelist = tf.data.Dataset.list_files(glob_str)
    # shuffle and repeat at the input file level
+   logger.debug(f'starting shuffle')
    filelist = filelist.shuffle(dc['shuffle_buffer'],reshuffle_each_iteration=dc['reshuffle_each_iteration'])
 
    # map to read files in parallel
+   logger.debug(f'starting map')
    ds = filelist.map(load_image_and_label, num_parallel_calls=dc['num_parallel_readers'])
+
+   # batch the data
+   ds = ds.batch(dc['batch_size'])
 
    # shard the data
    if config['hvd']:
@@ -60,15 +65,21 @@ def build_dataset(config,image_path,additional_dir):
 
 
 def load_image_and_label(image_path):
+   logger.debug(f'load_image_and_label {image_path}')
 
    label = tf.strings.split(image_path,os.path.sep)[-2]
    # annot_path = tf.strings.regex_replace(image_path,'Data','Annotation')
    # annot_path = tf.strings.regex_replace(annot_path,'\.JPEG','\.xml')
 
-   image = tf.io.read_file(image_path)
-   image = tf.image.crop_and_resize(image,tf.constant([0,1]),tf.constant([0]),crop_size)
+   img = tf.io.read_file(image_path)
+   # convert the compressed string to a 3D uint8 tensor
+   img = tf.image.decode_jpeg(img, channels=3)
+   # Use `convert_image_dtype` to convert to floats in the [0,1] range.
+   img = tf.image.convert_image_dtype(img, tf.float16)
+   # resize the image to the desired size.
+   img = tf.image.resize(img, crop_size)
 
-   return image,labels_hash.lookup(label)
+   return img,labels_hash.lookup(label)
 
 
 # def parse_xml(filename):

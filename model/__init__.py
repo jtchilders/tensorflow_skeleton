@@ -1,8 +1,8 @@
 import logging
 logger = logging.getLogger('model')
 
-__all__ = ['mnist']
-from . import mnist
+__all__ = ['mnist','resnet']
+from . import mnist,resnet
 
 
 def get_model(config):

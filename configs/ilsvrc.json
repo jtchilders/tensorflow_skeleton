@@ -1,6 +1,6 @@
 {
    "model": {
-      "name":                         "mnist"
+      "name":                         "resnet"
    },
    "optimizer": {
       "name":                          "adam",
@@ -27,13 +27,15 @@
    },
    "data": {
       "handler":                       "ilsvrc_dataset",
-      "batch_size":                    32,
+      "batch_size":                    10,
       "ilsvrc_base_dir":               "/projects/datascience/parton/image_data/ILSVRC",
-      "shuffle_buffer":                1000,
+      "shuffle_buffer":                10,
       "reshuffle_each_iteration":      true,
       "num_parallel_readers":          4,
-      "prefectch_buffer_size":         100,
-      "crop_image_size":               [512,512]
+      "prefectch_buffer_size":         10,
+      "crop_image_size":               [512,512],
+      "num_classes":                   1000,
+      "num_channels":                  3
    },
    "training": {
       "epochs":                        100,

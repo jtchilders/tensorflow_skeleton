@@ -1,11 +1,15 @@
 import tensorflow as tf
 
 
+def get_model(config):
+   net = ResNet50(config)
+   return net
+
 class ResNet50(tf.keras.Model):
-   def __init__(self):
+   def __init__(self,config):
       super(ResNet50,self).__init__(name='')
 
-      self.conv2a = tf.keras.layers.Conv2D(filters1, (1, 1))
+      self.conv2a = tf.keras.layers.Conv2D(config['data']['num_channels'], (1, 1))
       self.bn2a = tf.keras.layers.BatchNormalization()
 
       self.poolA = tf.keras.layers.MaxPool2D((3,3),(2,2))
@@ -32,7 +36,9 @@ class ResNet50(tf.keras.Model):
 
       self.poolB = tf.keras.layers.AveragePooling2D((2,2))
 
-      self.dense = tf.keras.layers.Dense()
+      self.flatten = tf.keras.layers.Flatten()
+
+      self.dense = tf.keras.layers.Dense(config['data']['num_classes'])
 
    def call(self, input_tensor, training=False):
       x = tf.nn.relu(self.bn2a(self.conv2a(input_tensor)))
@@ -49,10 +55,12 @@ class ResNet50(tf.keras.Model):
 
       x = self.poolB(x)
 
+      x = self.flatten(x)
+
       return self.dense(x)
 
 
-class ResnetIdentityBlock(tf.keras.Model):
+class ResnetIdentityBlock(tf.keras.layers.Layer):
    def __init__(self, kernel_size, filters):
       super(ResnetIdentityBlock, self).__init__(name='')
       filters1, filters2, filters3 = filters
@@ -82,7 +90,7 @@ class ResnetIdentityBlock(tf.keras.Model):
       return tf.nn.relu(x)
 
 
-class ResnetConvBlock(tf.keras.Model):
+class ResnetConvBlock(tf.keras.layers.Layer):
    def __init__(self, kernel_size, filters):
       super(ResnetConvBlock, self).__init__(name='')
       filters1, filters2, filters3 = filters

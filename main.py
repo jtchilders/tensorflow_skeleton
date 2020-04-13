@@ -20,8 +20,8 @@ def main():
 
    parser = argparse.ArgumentParser(description='')
    parser.add_argument('-c','--config',dest='config_filename',help='configuration filename in json format [default: %s]' % DEFAULT_CONFIG,default=DEFAULT_CONFIG)
-   parser.add_argument('--interop',help='set Tensorflow "inter_op_parallelism_threads" session config varaible [default: %s]' % DEFAULT_INTEROP,default=DEFAULT_INTEROP)
-   parser.add_argument('--intraop',help='set Tensorflow "intra_op_parallelism_threads" session config varaible [default: %s]' % DEFAULT_INTRAOP,default=DEFAULT_INTRAOP)
+   parser.add_argument('--interop',type=int,help='set Tensorflow "inter_op_parallelism_threads" session config varaible [default: %s]' % DEFAULT_INTEROP,default=DEFAULT_INTEROP)
+   parser.add_argument('--intraop',type=int,help='set Tensorflow "intra_op_parallelism_threads" session config varaible [default: %s]' % DEFAULT_INTRAOP,default=DEFAULT_INTRAOP)
    parser.add_argument('-l','--logdir',default=DEFAULT_LOGDIR,help='define location to save log information [default: %s]' % DEFAULT_LOGDIR)
 
    parser.add_argument('--horovod', default=False, action='store_true', help="Use MPI with horovod")
@@ -87,8 +87,6 @@ def main():
    logging.info('logdir:                     %s',args.logdir)
    logging.info('interop:                    %s',args.interop)
    logging.info('intraop:                    %s',args.intraop)
-   
-
 
    config = json.load(open(args.config_filename))
    config['device'] = device_str
@@ -98,8 +96,12 @@ def main():
    logger.info('-=-=-=-=-=-=-=-=-  CONFIG FILE -=-=-=-=-=-=-=-=-')
    config['hvd'] = hvd
 
+   tf.config.threading.set_inter_op_parallelism_threads(args.interop)
+   tf.config.threading.set_intra_op_parallelism_threads(args.intraop)
+
    trainds,testds = data_handler.get_datasets(config)
 
+   logger.info('get model')
    net = model.get_model(config)
 
    loss_func = losses.get_loss(config)
@@ -120,9 +122,14 @@ def main():
       test_loss_metric.reset_states()
       test_accuracy_metric.reset_states()
 
+      logger.info(f'begin epoch {epoch_num}')
+
       batch_num = 0
       for inputs, labels in trainds:
+         logger.info(f'batch num {batch_num}')
          l,p = train_step(net,loss_func,opt,inputs,labels,train_loss_metric,train_accuracy_metric,first_batch,hvd)
+         logger.info(f'done batch num {batch_num}')
+
          first_batch = False
          l = l.numpy()
          p = p.numpy()
@@ -145,16 +152,18 @@ def main():
 
 @tf.function
 def train_step(net,loss_func,opt,inputs,labels,loss_metric,acc_metric,first_batch=False,hvd=None,root_rank=0):
+   logger.info('train step')
+
    with tf.GradientTape() as tape:
       pred = net(inputs, training=True)
       loss_value = loss_func(labels, pred)
-
+   logger.info('train step')
    if hvd:
       tape = hvd.DistributedGradientTape(tape)
-
+   logger.info('train step')
    grads = tape.gradient(loss_value, net.trainable_variables)
    opt.apply_gradients(zip(grads, net.trainable_variables))
-
+   logger.info('train step')
    # Horovod: broadcast initial variable states from rank 0 to all other processes.
    # This is necessary to ensure consistent initialization of all workers when
    # training is started with random weights or restored from a checkpoint.
@@ -164,7 +173,7 @@ def train_step(net,loss_func,opt,inputs,labels,loss_metric,acc_metric,first_batc
    if hvd and first_batch:
       hvd.broadcast_variables(net.variables, root_rank=root_rank)
       hvd.broadcast_variables(opt.variables(), root_rank=root_rank)
-
+   logger.info('train step')
    loss_metric(loss_value)
    acc_metric(labels,pred)
 
