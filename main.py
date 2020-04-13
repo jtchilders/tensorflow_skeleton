@@ -33,6 +33,7 @@ def main():
    args = parser.parse_args()
 
    hvd = None
+   rank = 0
    logging_format = '%(asctime)s %(levelname)s:%(process)s:%(thread)s:%(name)s:%(message)s'
    logging_datefmt = '%Y-%m-%d %H:%M:%S'
    logging_level = logging.INFO
@@ -42,8 +43,8 @@ def main():
       hvd.init()
       logging_format = '%(asctime)s %(levelname)s:%(process)s:%(thread)s:' + (
                  '%05d' % hvd.rank()) + ':%(name)s:%(message)s'
-
-      if hvd.rank() > 0:
+      rank = hvd.rank()
+      if rank > 0:
          logging_level = logging.WARNING
 
    if args.debug and not args.error and not args.warning:
@@ -114,7 +115,11 @@ def main():
    test_loss_metric = tf.keras.metrics.Mean(name='test_loss')
    test_accuracy_metric = tf.keras.metrics.SparseCategoricalAccuracy(name='test_acc')
 
+   train_summary_writer = tf.summary.create_file_writer(args.logdir + os.path.sep + 'train')
+   test_summary_writer = tf.summary.create_file_writer(args.logdir + os.path.sep + 'test')
+
    first_batch = True
+   batches_per_epoch = 0
    for epoch_num in range(config['training']['epochs']):
       # Reset the metrics at the start of the next epoch
       train_loss_metric.reset_states()
@@ -136,18 +141,27 @@ def main():
          labels = labels.numpy()
          #logger.info(f' loss = {l}  \n pred = {p[0]} \n labels={labels[0]} \n ')
          batch_num += 1
-         if batch_num % config['training']['status'] == 0:
+         if rank == 0 and batch_num % config['training']['status'] == 0:
             logger.info(f' [{epoch_num:5d}:{batch_num:5d}]: loss = {train_loss_metric.result():10.5f} acc = {train_accuracy_metric.result():10.5f}')
+            with train_summary_writer.as_default():
+               tf.summary.scalar('loss', train_loss_metric.result(), step=epoch_num*batches_per_epoch + batch_num)
+               tf.summary.scalar('accuracy', train_accuracy_metric.result(), step=epoch_num*batches_per_epoch + batch_num)
+      batches_per_epoch = batch_num
 
       for test_inputs, test_labels in testds:
          test_step(net,loss_func,test_inputs, test_labels,test_loss_metric,test_accuracy_metric)
 
-      template = 'Epoch {:10.5f}, Loss: {:10.5f}, Accuracy: {:10.5f}, Test Loss: {:10.5f}, Test Accuracy: {:10.5f}'
-      logger.info(template.format(epoch_num + 1,
-                            train_loss_metric.result(),
-                            train_accuracy_metric.result() * 100,
-                            test_loss_metric.result(),
-                            test_accuracy_metric.result() * 100))
+      if rank > 0:
+         with test_summary_writer.as_default():
+            tf.summary.scalar('loss', test_loss_metric.result(), step=epoch_num * batches_per_epoch + batch_num)
+            tf.summary.scalar('accuracy', test_accuracy_metric.result(), step=epoch_num * batches_per_epoch + batch_num)
+
+         template = 'Epoch {:10.5f}, Loss: {:10.5f}, Accuracy: {:10.5f}, Test Loss: {:10.5f}, Test Accuracy: {:10.5f}'
+         logger.info(template.format(epoch_num + 1,
+                               train_loss_metric.result(),
+                               train_accuracy_metric.result() * 100,
+                               test_loss_metric.result(),
+                               test_accuracy_metric.result() * 100))
 
 
 @tf.function

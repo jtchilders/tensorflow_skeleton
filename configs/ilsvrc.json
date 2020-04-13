@@ -28,7 +28,8 @@
    "data": {
       "handler":                       "ilsvrc_dataset",
       "batch_size":                    10,
-      "ilsvrc_base_dir":               "/projects/datascience/parton/image_data/ILSVRC",
+      "train_filelist":                "/projects/datascience/parton/git/tensorflow_skeleton/ilsvrc_train.txt",
+      "test_filelist":                 "/projects/datascience/parton/git/tensorflow_skeleton/ilsvrc_test.txt",
       "shuffle_buffer":                10,
       "reshuffle_each_iteration":      true,
       "num_parallel_readers":          4,
