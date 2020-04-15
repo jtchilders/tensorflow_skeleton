@@ -42,7 +42,9 @@ def build_dataset_from_filelist(config,filelist_filename):
 
    dc = config['data']
 
-   numranks = 1 if config['hvd'] else config['hvd'].Get_size()
+   numranks = 1
+   if config['hvd']:
+      numranks = config['hvd'].Get_size()
 
    filelist = []
    with open(filelist_filename) as file:
