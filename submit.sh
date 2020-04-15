@@ -20,4 +20,4 @@ if [ $RANKS -gt 1 ]; then
 fi
 
 aprun -n $RANKS -N $RANKS_PER_NODE -d $OMP_NUM_THREADS -j $HYPERTHREADS_PER_CORE --cc depth \
-   python main.py -c configs/ilsvrc.json --debug --logdir logdir/$COBALT_JOBID --intraop $OMP_NUM_THREADS $HOROVOD
+   python main.py -c configs/ilsvrc.json --logdir logdir/$COBALT_JOBID --intraop $OMP_NUM_THREADS $HOROVOD

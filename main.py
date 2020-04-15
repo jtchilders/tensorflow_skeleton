@@ -107,7 +107,7 @@ def main():
 
    loss_func = losses.get_loss(config)
 
-   opt = tf.keras.optimizers.Adam()
+   opt = get_optimizer(config)
 
    train_loss_metric = tf.keras.metrics.Mean(name='train_loss')
    train_accuracy_metric = tf.keras.metrics.SparseCategoricalAccuracy(name='train_acc')
@@ -115,8 +115,9 @@ def main():
    test_loss_metric = tf.keras.metrics.Mean(name='test_loss')
    test_accuracy_metric = tf.keras.metrics.SparseCategoricalAccuracy(name='test_acc')
 
-   train_summary_writer = tf.summary.create_file_writer(args.logdir + os.path.sep + 'train')
-   test_summary_writer = tf.summary.create_file_writer(args.logdir + os.path.sep + 'test')
+   if rank == 0:
+      train_summary_writer = tf.summary.create_file_writer(args.logdir + os.path.sep + 'train')
+      test_summary_writer = tf.summary.create_file_writer(args.logdir + os.path.sep + 'test')
 
    first_batch = True
    batches_per_epoch = 0
@@ -130,31 +131,37 @@ def main():
       logger.info(f'begin epoch {epoch_num}')
 
       batch_num = 0
+      start = time.time()
       for inputs, labels in trainds:
-         logger.info(f'batch num {batch_num}')
-         l,p = train_step(net,loss_func,opt,inputs,labels,train_loss_metric,train_accuracy_metric,first_batch,hvd)
-         logger.info(f'done batch num {batch_num}')
+         train_step(net,loss_func,opt,inputs,labels,train_loss_metric,train_accuracy_metric,first_batch,hvd)
 
          first_batch = False
-         l = l.numpy()
-         p = p.numpy()
-         labels = labels.numpy()
-         #logger.info(f' loss = {l}  \n pred = {p[0]} \n labels={labels[0]} \n ')
          batch_num += 1
          if rank == 0 and batch_num % config['training']['status'] == 0:
-            logger.info(f' [{epoch_num:5d}:{batch_num:5d}]: loss = {train_loss_metric.result():10.5f} acc = {train_accuracy_metric.result():10.5f}')
+            img_per_sec = config['training']['status'] * config['data']['batch_size'] / (time.time() - start)
+            logger.info(f' [{epoch_num:5d}:{batch_num:5d}]: loss = {train_loss_metric.result():10.5f} acc = {train_accuracy_metric.result():10.5f}  imgs/sec = {img_per_sec}')
+            logger.info('%s',opt.__dict__)
+
             with train_summary_writer.as_default():
-               tf.summary.scalar('loss', train_loss_metric.result(), step=epoch_num*batches_per_epoch + batch_num)
-               tf.summary.scalar('accuracy', train_accuracy_metric.result(), step=epoch_num*batches_per_epoch + batch_num)
+               tf.summary.scalar('loss', train_loss_metric.result(), step=epoch_num * batches_per_epoch + batch_num)
+               tf.summary.scalar('accuracy', train_accuracy_metric.result(), step=epoch_num * batches_per_epoch + batch_num)
+            start = time.time()
+
       batches_per_epoch = batch_num
+      logger.info(f'batches_per_epoch = {batches_per_epoch}')
 
       for test_inputs, test_labels in testds:
          test_step(net,loss_func,test_inputs, test_labels,test_loss_metric,test_accuracy_metric)
 
-      if rank > 0:
+      test_loss = tf.constant(test_loss_metric.result())
+      test_acc = tf.constant(test_accuracy_metric.result())
+      mean_test_loss = hvd.allreduce(test_loss)
+      mean_test_acc = hvd.allreduce(test_acc)
+
+      if rank == 0:
          with test_summary_writer.as_default():
-            tf.summary.scalar('loss', test_loss_metric.result(), step=epoch_num * batches_per_epoch + batch_num)
-            tf.summary.scalar('accuracy', test_accuracy_metric.result(), step=epoch_num * batches_per_epoch + batch_num)
+            tf.summary.scalar('loss', mean_test_loss, step=epoch_num * batches_per_epoch + batch_num)
+            tf.summary.scalar('accuracy', mean_test_acc, step=epoch_num * batches_per_epoch + batch_num)
 
          template = 'Epoch {:10.5f}, Loss: {:10.5f}, Accuracy: {:10.5f}, Test Loss: {:10.5f}, Test Accuracy: {:10.5f}'
          logger.info(template.format(epoch_num + 1,
@@ -166,18 +173,14 @@ def main():
 
 @tf.function
 def train_step(net,loss_func,opt,inputs,labels,loss_metric,acc_metric,first_batch=False,hvd=None,root_rank=0):
-   logger.info('train step')
 
    with tf.GradientTape() as tape:
       pred = net(inputs, training=True)
       loss_value = loss_func(labels, pred)
-   logger.info('train step')
    if hvd:
       tape = hvd.DistributedGradientTape(tape)
-   logger.info('train step')
    grads = tape.gradient(loss_value, net.trainable_variables)
    opt.apply_gradients(zip(grads, net.trainable_variables))
-   logger.info('train step')
    # Horovod: broadcast initial variable states from rank 0 to all other processes.
    # This is necessary to ensure consistent initialization of all workers when
    # training is started with random weights or restored from a checkpoint.
@@ -187,11 +190,10 @@ def train_step(net,loss_func,opt,inputs,labels,loss_metric,acc_metric,first_batc
    if hvd and first_batch:
       hvd.broadcast_variables(net.variables, root_rank=root_rank)
       hvd.broadcast_variables(opt.variables(), root_rank=root_rank)
-   logger.info('train step')
    loss_metric(loss_value)
    acc_metric(labels,pred)
 
-   return loss_value,pred
+   # return loss_value,pred
 
 @tf.function
 def test_step(net,loss_func,inputs,labels,loss_metric,acc_metric):
@@ -202,6 +204,35 @@ def test_step(net,loss_func,inputs,labels,loss_metric,acc_metric):
 
   loss_metric(t_loss)
   acc_metric(labels, predictions)
+
+
+def get_optimizer(config):
+
+   # setup learning rate
+   lr_schedule = None
+   if 'lr_schedule' in config:
+      lrs_name = config['lr_schedule']['name']
+      lrs_args = config['lr_schedule'].get('args',None)
+      if hasattr(tf.keras.optimizers.schedules, lrs_name):
+         logger.info(f'using learning rate schedule {lrs_name}')
+         lr_schedule = getattr(tf.keras.optimizers.schedules, lrs_name)
+         if lrs_args:
+            lr_schedule = lr_schedule(**lrs_args)
+         else:
+            raise Exception(f'missing args for learning rate schedule {lrs_name}')
+
+   opt_name = config['optimizer']['name']
+   opt_args = config['optimizer'].get('args',None)
+   if hasattr(tf.keras.optimizers, opt_name):
+      if opt_args:
+         if lr_schedule:
+            opt_args['learning_rate'] = lr_schedule
+         logger.info('passing args to optimizer: %s', opt_args)
+         return getattr(tf.keras.optimizers, opt_name)(**opt_args)
+      else:
+         return getattr(tf.keras.optimizers, opt_name)()
+   else:
+      raise Exception(f'could not locate optimizer {opt_name}')
 
 
 if __name__ == "__main__":

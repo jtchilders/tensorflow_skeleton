@@ -3,13 +3,14 @@ logger = logging.getLogger(__name__)
 
 
 def get_model(config):
-   net = DummyModel()
+   net = MNIST()
    return net
 
-class DummyModel(tf.keras.Model):
+
+class MNIST(tf.keras.Model):
 
    def __init__(self):
-      super(DummyModel, self).__init__()
+      super(MNIST, self).__init__()
       self.conv1 = tf.keras.layers.Conv2D(32, 3, activation='relu')
       self.flatten = tf.keras.layers.Flatten()
       self.d1 = tf.keras.layers.Dense(128, activation='relu')

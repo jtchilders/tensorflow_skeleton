@@ -3,17 +3,15 @@
       "name":                         "resnet"
    },
    "optimizer": {
-      "name":                          "adam",
-      "learning_rate":                 0.001
+      "name":                          "Adam"
    },
-   "learning_rate": {
-      "name":                          "cyclic_learning_rate",
-      "cyclic_learning_rate": {
-         "learning_rate":              0.00001,
-         "max_lr":                     0.01,
-         "step_size":                  200,
-         "gamma":                      0.99994,
-         "mode":                       "triangular2"
+   "lr_schedule": {
+      "name":                          "ExponentialDecay",
+      "args": {
+         "initial_learning_rate":      0.001,
+         "decay_steps":                1000,
+         "decay_rate":                 0.75,
+         "staircase":                  false
       }
    },
    "loss": {
@@ -27,10 +25,10 @@
    },
    "data": {
       "handler":                       "ilsvrc_dataset",
-      "batch_size":                    10,
+      "batch_size":                    64,
       "train_filelist":                "/projects/datascience/parton/git/tensorflow_skeleton/ilsvrc_train.txt",
       "test_filelist":                 "/projects/datascience/parton/git/tensorflow_skeleton/ilsvrc_test.txt",
-      "shuffle_buffer":                10,
+      "shuffle_buffer":                1000,
       "reshuffle_each_iteration":      true,
       "num_parallel_readers":          4,
       "prefectch_buffer_size":         10,

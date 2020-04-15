@@ -23,7 +23,8 @@ def get_datasets(config):
       filepath = file.readline().strip()
 
    label_path = '/'.join(filepath.split('/')[:-2])
-   labels = glob.glob(label_path)
+   labels = glob.glob(label_path + os.path.sep + '*')
+   logger.debug(f'num labels: {len(labels)}')
    labels = [os.path.basename(i) for i in labels]
    hash_values = tf.range(len(labels))
    hash_keys = tf.constant(labels, dtype=tf.string)
@@ -41,11 +42,14 @@ def build_dataset_from_filelist(config,filelist_filename):
 
    dc = config['data']
 
+   numranks = 1 if config['hvd'] else config['hvd'].Get_size()
+
    filelist = []
    with open(filelist_filename) as file:
       for line in file:
          filelist.append(line.strip())
-   logger.debug(f'input filelist contains {len(filelist)} files {filelist[0]}  {filelist[-1]}')
+   batches_per_rank = len(filelist) / dc['batch_size'] / numranks
+   logger.info(f'input filelist contains {len(filelist)} files, estimated f{batches_per_rank}')
    # glob for the input files
    filelist = tf.data.Dataset.from_tensor_slices(filelist)
    # shuffle and repeat at the input file level
