@@ -1,7 +1,5 @@
 import tensorflow as tf
-import logging,os,glob
-import xml.etree.ElementTree as ET
-import numpy as np
+import logging,os,glob,sys
 logger = logging.getLogger(__name__)
 
 labels_hash = None
@@ -44,14 +42,14 @@ def build_dataset_from_filelist(config,filelist_filename):
 
    numranks = 1
    if config['hvd']:
-      numranks = config['hvd'].Get_size()
+      numranks = config['hvd'].size()
 
    filelist = []
    with open(filelist_filename) as file:
       for line in file:
          filelist.append(line.strip())
-   batches_per_rank = len(filelist) / dc['batch_size'] / numranks
-   logger.info(f'input filelist contains {len(filelist)} files, estimated f{batches_per_rank}')
+   batches_per_rank = int(len(filelist) / dc['batch_size'] / numranks)
+   logger.info(f'input filelist contains {len(filelist)} files, estimated {batches_per_rank}')
    # glob for the input files
    filelist = tf.data.Dataset.from_tensor_slices(filelist)
    # shuffle and repeat at the input file level
@@ -60,7 +58,7 @@ def build_dataset_from_filelist(config,filelist_filename):
 
    # map to read files in parallel
    logger.debug('starting map')
-   ds = filelist.map(load_image_and_label, num_parallel_calls=dc['num_parallel_readers'])
+   ds = filelist.map(load_image_and_label, num_parallel_calls=tf.data.experimental.AUTOTUNE)  # num_parallel_calls=dc['num_parallel_readers']) #
 
    # batch the data
    ds = ds.batch(dc['batch_size'])
@@ -70,7 +68,7 @@ def build_dataset_from_filelist(config,filelist_filename):
       ds = ds.shard(config['hvd'].size(), config['hvd'].rank())
 
    # how many inputs to prefetch to improve pipeline performance
-   ds = ds.prefetch(buffer_size=dc['prefectch_buffer_size'])
+   ds = ds.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)  # dc['prefectch_buffer_size']) #
 
    return ds
 
@@ -119,7 +117,7 @@ def load_image_and_label(image_path):
    img = tf.image.convert_image_dtype(img, tf.float16)
    # resize the image to the desired size.
    img = tf.image.resize(img, crop_size)
-
+   # tf.print(image_path,label,labels_hash.lookup(label), output_stream=sys.stderr)
    return img,labels_hash.lookup(label)
 
 
