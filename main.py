@@ -25,6 +25,7 @@ def main():
    parser.add_argument('-l','--logdir',default=DEFAULT_LOGDIR,help='define location to save log information [default: %s]' % DEFAULT_LOGDIR)
 
    parser.add_argument('--horovod', default=False, action='store_true', help="Use MPI with horovod")
+   parser.add_argument('--profiler',default=False, action='store_true', help='Use TF profiler, needs CUPTI in LD_LIBRARY_PATH for Cuda')
 
    parser.add_argument('--batch-term',dest='batch_term',type=int,help='if set, terminates training after the specified number of batches',default=0)
 
@@ -137,7 +138,7 @@ def main():
 
       batch_num = 0
       start = time.time()
-      if rank == 0:
+      if rank == 0 and args.profiler:
           tf.profiler.experimental.start(args.logdir)
       for inputs, labels in trainds:
          # logger.debug(f'start batch {batch_num}')
@@ -162,7 +163,7 @@ def main():
             start = time.time()
 
          if args.batch_term == batch_num:
-            if rank == 0:
+            if rank == 0 and args.profiler:
                tf.profiler.experimental.stop()
             exit = True
             break
