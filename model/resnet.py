@@ -42,7 +42,7 @@ class ResNet50(tf.keras.Model):
 
    def call(self, input_tensor, training=False):
       x = self.conv2a(input_tensor)
-      x = self.bn2a(x)
+      x = self.bn2a(x, training=training)
       x = tf.nn.relu(x)
 
       x = self.poolA(x)
