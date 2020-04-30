@@ -49,9 +49,12 @@ def build_dataset_from_filelist(config,filelist_filename):
       for line in file:
          filelist.append(line.strip())
    batches_per_rank = int(len(filelist) / dc['batch_size'] / numranks)
-   logger.info(f'input filelist contains {len(filelist)} files, estimated {batches_per_rank}')
+   logger.info(f'input filelist contains {len(filelist)} files, estimated batches per rank {batches_per_rank}')
    # glob for the input files
    filelist = tf.data.Dataset.from_tensor_slices(filelist)
+   # shard the data
+   if config['hvd']:
+      filelist = filelist.shard(config['hvd'].size(), config['hvd'].rank())
    # shuffle and repeat at the input file level
    logger.debug('starting shuffle')
    filelist = filelist.shuffle(dc['shuffle_buffer'],reshuffle_each_iteration=dc['reshuffle_each_iteration'])
@@ -61,11 +64,7 @@ def build_dataset_from_filelist(config,filelist_filename):
    ds = filelist.map(load_image_and_label, num_parallel_calls=tf.data.experimental.AUTOTUNE)  # num_parallel_calls=dc['num_parallel_readers']) #
 
    # batch the data
-   ds = ds.batch(dc['batch_size'])
-
-   # shard the data
-   if config['hvd']:
-      ds = ds.shard(config['hvd'].size(), config['hvd'].rank())
+   ds = ds.batch(dc['batch_size']) 
 
    # how many inputs to prefetch to improve pipeline performance
    ds = ds.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)  # dc['prefectch_buffer_size']) #
