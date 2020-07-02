@@ -3,7 +3,7 @@
       "name":                         "mnist"
    },
    "optimizer": {
-      "name":                          "adam",
+      "name":                          "Adam",
       "learning_rate":                 0.001
    },
    "learning_rate": {

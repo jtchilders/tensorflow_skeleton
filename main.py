@@ -192,15 +192,15 @@ def main():
          if (test_num + 1) % status_count == 0:
             logger.info(f' [{epoch_num:5d}:{test_num:5d}]: test loss = {test_loss_metric.result():10.5f}  test acc = {test_accuracy_metric.result():10.5f}')
 
-      test_loss = tf.constant(test_loss_metric.result())
-      test_acc = tf.constant(test_accuracy_metric.result())
-      mean_test_loss = hvd.allreduce(test_loss)
-      mean_test_acc = hvd.allreduce(test_acc)
+      # test_loss = tf.constant(test_loss_metric.result())
+      # test_acc = tf.constant(test_accuracy_metric.result())
+      # mean_test_loss = hvd.allreduce(test_loss)
+      # mean_test_acc = hvd.allreduce(test_acc)
 
       if rank == 0:
          with test_summary_writer.as_default():
-            tf.summary.scalar('loss', mean_test_loss, step=epoch_num * batches_per_epoch + batch_num)
-            tf.summary.scalar('accuracy', mean_test_acc, step=epoch_num * batches_per_epoch + batch_num)
+            tf.summary.scalar('loss', test_loss_metric.result(), step=epoch_num * batches_per_epoch + batch_num)
+            tf.summary.scalar('accuracy', test_accuracy_metric.result(), step=epoch_num * batches_per_epoch + batch_num)
 
          template = 'Epoch {:10.5f}, Loss: {:10.5f}, Accuracy: {:10.5f}, Test Loss: {:10.5f}, Test Accuracy: {:10.5f}'
          logger.info(template.format(epoch_num + 1,

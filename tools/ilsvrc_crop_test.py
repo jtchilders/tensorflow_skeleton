@@ -154,7 +154,7 @@ def load_image_label_bb(image_path):
 
 def get_bounding_boxes(filename):
    filename = bytes.decode(filename.numpy())
-   logger.debug(filename)
+   logger.debug('xml file: %s',filename)
    try:
       tree = ET.parse(filename)
       root = tree.getroot()
@@ -195,14 +195,44 @@ if __name__ == '__main__':
    summary_writer = tf.summary.create_file_writer('ilsvrc_tblog')
 
    config = json.load(open(args.config_filename))
-   config['hvd'] = None
-   trainds, testds = get_datasets(config)
 
-   for i,(inputs,labels) in enumerate(trainds):
-      logger.info('i = %s input shape = %s    labels shape = %s',i,inputs.shape,labels.shape)
-      logger.info('i = %s labels = %s',i,labels)
+   crop_size = tf.constant(config['data']['crop_image_size'])
+   filelist_filename = config['data']['train_filelist']
 
-      with summary_writer.as_default():
-         tf.summary.image("25 training data examples", inputs, max_outputs=25, step=i)
+   filelist = []
+   j = 0
+   with open(filelist_filename) as file:
+      for i,image_filename in enumerate(file):
+         image_filename = image_filename.strip()
+         logger.info('i = %s; image fn = %s',i,image_filename)
+         xml_filename = image_filename.replace('Data','Annotations').replace('.JPEG','.xml')
 
-      if i > 5: break
+         bb,bi = get_bounding_boxes(tf.convert_to_tensor(xml_filename))
+         if bb.shape[0] == 1: continue
+
+         logger.info('bb = %s; bi= %s',bb,bi)
+
+         assert os.path.exists(image_filename), f'"{image_filename}" not found'
+         img = tf.io.read_file(image_filename)
+         # convert the compressed string to a 3D uint8 tensor
+         img = tf.image.decode_jpeg(img, channels=3)
+         img = tf.expand_dims(img, 0)
+         logger.info(f'image shape = {img.shape}  type = {type(img)}  dtype = {img.dtype}')
+         logger.info(f'image= {img}')
+         with summary_writer.as_default():
+            tf.summary.image("raw images", img,step=j)
+
+         # create individual images based on bounding boxes
+         imgs = tf.image.crop_and_resize(img, bb, bi, crop_size)
+         imgs = tf.cast(imgs,tf.uint8)
+         # colors = [[255.,0.,0.]]
+         # imgs = tf.image.draw_bounding_boxes(tf.cast(img,tf.float32),tf.cast(tf.expand_dims(bb,0),tf.float32),tf.convert_to_tensor(colors,tf.float32))
+         # imgs = tf.cast(imgs,tf.uint8)
+         # logger.info(f'images shape = {imgs.shape}  type = {type(imgs)} dtype = {imgs.dtype}')
+         # logger.info(f'image= {imgs}')
+         with summary_writer.as_default():
+            tf.summary.image("cropped images", imgs,step=j)
+         j += 1
+         if j >= 10: break
+
+
