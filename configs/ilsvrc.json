@@ -27,8 +27,8 @@
    "data": {
       "handler":                       "ilsvrc_dataset",
       "batch_size":                    32,
-      "train_filelist":                "ilsvrc_train.txt",
-      "test_filelist":                 "ilsvrc_test.txt",
+      "train_filelist":                "/gpfs/jlse-fs0/projects/datascience/parton/data/imagenet/ILSVRC/ilsvrc_train_filelist.txt",
+      "test_filelist":                 "/gpfs/jlse-fs0/projects/datascience/parton/data/imagenet/ILSVRC/ilsvrc_test_filelist.txt",
       "shuffle_buffer":                200000,
       "reshuffle_each_iteration":      true,
       "num_parallel_readers":          4,
