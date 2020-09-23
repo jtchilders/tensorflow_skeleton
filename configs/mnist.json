@@ -27,7 +27,7 @@
    "data": {
       "handler":                       "mnist_dataset",
       "batch_size":                    16,
-      "shuffle_buffer":                200000,
+      "shuffle_buffer":                10000,
       "reshuffle_each_iteration":      true,
       "num_parallel_readers":          8,
       "prefectch_buffer_size":         10,

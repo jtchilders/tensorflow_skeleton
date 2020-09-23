@@ -4,6 +4,7 @@ import tensorflow as tf
 def get_datasets(config_file):
 
     batch_size = config_file['data']['batch_size']
+    shuffle_buffer = config_file['data']['shuffle_buffer']
 
     mnist = tf.keras.datasets.mnist
 
@@ -18,14 +19,15 @@ def get_datasets(config_file):
     x_train = x_train[..., tf.newaxis]
     x_test = x_test[..., tf.newaxis]
 
-    train_ds = tf.data.Dataset.from_tensor_slices(
-        (x_train, y_train)).shuffle(10000).batch(batch_size)
-
-    test_ds = tf.data.Dataset.from_tensor_slices((x_test, y_test)).batch(batch_size)
+    train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train))
+    test_ds = tf.data.Dataset.from_tensor_slices((x_test, y_test))
 
     if 'hvd' in config_file and config_file['hvd'] is not None:
         hvd = config_file['hvd']
         train_ds = train_ds.shard(hvd.size(), hvd.rank())
         test_ds = test_ds.shard(hvd.size(), hvd.rank())
+
+    train_ds = train_ds.shuffle(shuffle_buffer).batch(batch_size)
+    test_ds  = test_ds.batch(batch_size)
 
     return train_ds,test_ds

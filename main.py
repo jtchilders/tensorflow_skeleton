@@ -160,22 +160,22 @@ def main():
          train_loss_metric += tf.reduce_mean(loss_value)
          train_accuracy_metric += tf.divide(tf.reduce_sum(tf.cast(tf.equal(tf.argmax(pred,-1,tf.int32),tf.cast(labels,tf.int32)),tf.int32)),tf.shape(labels,tf.int32))
 
-         if rank == 0 and batch_num % status_count == 0:
+         if batch_num % status_count == 0:
             img_per_sec = status_count * batch_size * nranks / (time.time() - start)
             loss = train_loss_metric / status_count
             acc = (train_accuracy_metric / status_count)[0]
             logger.info(f' [{epoch_num:5d}:{batch_num:5d}]: loss = {loss:10.5f} acc = {acc:10.5f}  imgs/sec = {img_per_sec}')
-            with train_summary_writer.as_default():
-               step = epoch_num * batches_per_epoch + batch_num
-               tf.summary.experimental.set_step(step)
-               tf.summary.scalar('loss', loss, step=step)
-               tf.summary.scalar('accuracy', acc, step=step)
-               tf.summary.scalar('img_per_sec',img_per_sec,step=step)
-               tf.summary.scalar('learning_rate',opt._decayed_lr(tf.float32))
+            if rank == 0:
+               with train_summary_writer.as_default():
+                  step = epoch_num * batches_per_epoch + batch_num
+                  tf.summary.experimental.set_step(step)
+                  tf.summary.scalar('loss', loss, step=step)
+                  tf.summary.scalar('accuracy', acc, step=step)
+                  tf.summary.scalar('img_per_sec',img_per_sec,step=step)
+                  tf.summary.scalar('learning_rate',opt._decayed_lr(tf.float32))
             start = time.time()
             train_loss_metric = 0
             train_accuracy_metric = 0
-
          if args.batch_term == batch_num:
             logger.info('terminating batch training after %s batches',batch_num)
             if rank == args.profrank and args.profiler:
@@ -187,7 +187,7 @@ def main():
          break
       batches_per_epoch = batch_num
       logger.info(f'batches_per_epoch = {batches_per_epoch}')
-
+      
       for test_num,(test_inputs, test_labels) in enumerate(testds):
          test_step(net,loss_func,test_inputs, test_labels,test_loss_metric,test_accuracy_metric)
 
