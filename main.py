@@ -177,7 +177,9 @@ def main():
             train_accuracy_metric = 0
 
          if args.batch_term == batch_num:
+            logger.info('terminating batch training after %s batches',batch_num)
             if rank == args.profrank and args.profiler:
+               logger.info('stop profiling')
                tf.profiler.experimental.stop()
             exit = True
             break
