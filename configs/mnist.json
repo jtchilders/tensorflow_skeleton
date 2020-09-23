@@ -25,10 +25,8 @@
       "name":                          "simple_class_accuracy"
    },
    "data": {
-      "handler":                       "mnist",
-      "batch_size":                    128,
-      "train_filelist":                "/projects/datascience/parton/image_data/ILSVRC/ilsvrc_train_filelist.txt",
-      "test_filelist":                 "/projects/datascience/parton/image_data/ILSVRC/ilsvrc_test_filelist.txt",
+      "handler":                       "mnist_dataset",
+      "batch_size":                    16,
       "shuffle_buffer":                200000,
       "reshuffle_each_iteration":      true,
       "num_parallel_readers":          8,
@@ -38,10 +36,10 @@
       "num_channels":                  3
    },
    "training": {
-      "epochs":                        100,
+      "epochs":                        5,
       "status":                        10
    },
    "validation": {
-      "batches":                       2
+      "batches":                       16
    }
 }
