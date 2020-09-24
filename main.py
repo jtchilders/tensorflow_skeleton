@@ -213,7 +213,7 @@ def main():
             tf.summary.scalar('accuracy', test_accuracy_metric.result(), step=epoch_num * batches_per_epoch + batch_num)
          ave_img_rate = image_rate_sum / image_rate_n
          std_img_rate = np.sqrt((1/image_rate_n) * image_rate_sum2 - ave_img_rate*ave_img_rate)
-         template = 'Epoch {:10.5f}, Loss: {:10.5f}, Accuracy: {:10.5f}, Test Loss: {:10.5f}, Test Accuracy: {:10.5f} Averate Image Rate: {:10.5f} +/- {:10.5f}'
+         template = 'Epoch {:10.5f}, Loss: {:10.5f}, Accuracy: {:10.5f}, Test Loss: {:10.5f}, Test Accuracy: {:10.5f} Average Image Rate: {:10.5f} +/- {:10.5f}'
          logger.info(template.format(epoch_num + 1,
                                loss,
                                acc * 100,
