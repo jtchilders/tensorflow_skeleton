@@ -2,6 +2,7 @@
 import argparse,logging,json,time,os,sys
 os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '3'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+import numpy as np
 import tensorflow as tf
 from tensorflow.python.client import device_lib
 from tensorflow.keras.mixed_precision import experimental as mixed_precision
@@ -147,6 +148,9 @@ def main():
 
       batch_num = 0
       start = time.time()
+      image_rate_sum = 0.
+      image_rate_sum2 = 0.
+      image_rate_n = 0.
       if rank == args.profrank and args.profiler:
           logger.info('profiling')
           tf.profiler.experimental.start(args.logdir)
@@ -176,6 +180,10 @@ def main():
             start = time.time()
             train_loss_metric = 0
             train_accuracy_metric = 0
+            if batch_num > 1:
+                image_rate_n += 1
+                image_rate_sum += img_per_sec
+                image_rate_sum2 += img_per_sec * img_per_sec
          if args.batch_term == batch_num:
             logger.info('terminating batch training after %s batches',batch_num)
             if rank == args.profrank and args.profiler:
@@ -203,13 +211,16 @@ def main():
          with test_summary_writer.as_default():
             tf.summary.scalar('loss', test_loss_metric.result(), step=epoch_num * batches_per_epoch + batch_num)
             tf.summary.scalar('accuracy', test_accuracy_metric.result(), step=epoch_num * batches_per_epoch + batch_num)
-
-         template = 'Epoch {:10.5f}, Loss: {:10.5f}, Accuracy: {:10.5f}, Test Loss: {:10.5f}, Test Accuracy: {:10.5f}'
+         ave_img_rate = image_rate_sum / image_rate_n
+         std_img_rate = np.sqrt((1/image_rate_n) * image_rate_sum2 - ave_img_rate*ave_img_rate)
+         template = 'Epoch {:10.5f}, Loss: {:10.5f}, Accuracy: {:10.5f}, Test Loss: {:10.5f}, Test Accuracy: {:10.5f} Averate Image Rate: {:10.5f} +/- {:10.5f}'
          logger.info(template.format(epoch_num + 1,
                                loss,
                                acc * 100,
                                test_loss_metric.result(),
-                               test_accuracy_metric.result() * 100))
+                               test_accuracy_metric.result() * 100,
+                               ave_img_rate,
+                               std_img_rate))
 
 
 @tf.function
