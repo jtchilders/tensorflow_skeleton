@@ -151,6 +151,8 @@ def main():
       image_rate_sum = 0.
       image_rate_sum2 = 0.
       image_rate_n = 0.
+      partial_img_rate = np.zeros(10)
+      partial_img_rate_counter = 0
       if rank == args.profrank and args.profiler:
           logger.info('profiling')
           tf.profiler.experimental.start(args.logdir)
@@ -166,9 +168,18 @@ def main():
 
          if batch_num % status_count == 0:
             img_per_sec = status_count * batch_size * nranks / (time.time() - start)
+            img_per_sec_std = 0
+            if batch_num > 1:
+                image_rate_n += 1
+                image_rate_sum += img_per_sec
+                image_rate_sum2 += img_per_sec * img_per_sec
+                partial_img_rate[partial_img_rate_counter % 10] = img_per_sec
+                partial_img_rate_counter += 1
+                img_per_sec = np.mean(partial_img_rate[partial_img_rate>0])
+                img_per_sec_std = np.std(partial_img_rate[partial_img_rate>0])
             loss = train_loss_metric / status_count
             acc = (train_accuracy_metric / status_count)[0]
-            logger.info(f' [{epoch_num:5d}:{batch_num:5d}]: loss = {loss:10.5f} acc = {acc:10.5f}  imgs/sec = {img_per_sec}')
+            logger.info(f' [{epoch_num:5d}:{batch_num:5d}]: loss = {loss:10.5f} acc = {acc:10.5f}  imgs/sec = {img_per_sec:7.1f} +/- {img_per_sec_std:7.1f}')
             if rank == 0:
                with train_summary_writer.as_default():
                   step = epoch_num * batches_per_epoch + batch_num
@@ -180,10 +191,8 @@ def main():
             start = time.time()
             train_loss_metric = 0
             train_accuracy_metric = 0
-            if batch_num > 1:
-                image_rate_n += 1
-                image_rate_sum += img_per_sec
-                image_rate_sum2 += img_per_sec * img_per_sec
+            
+                
          if args.batch_term == batch_num:
             logger.info('terminating batch training after %s batches',batch_num)
             if rank == args.profrank and args.profiler:

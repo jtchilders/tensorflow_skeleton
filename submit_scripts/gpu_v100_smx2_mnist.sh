@@ -20,4 +20,4 @@ if [ $PROCS -gt 1 ]; then
 fi
 
 mpirun -n $PROCS --hostfile $COBALT_NODEFILE \
-   python main.py -c configs/ilsvrc.json --logdir logdir/$COBALT_JOBID --intraop $OMP_NUM_THREADS --interop $OMP_NUM_THREADS $HOROVOD
+   python main.py -c configs/mnist.json --logdir logdir/$COBALT_JOBID --intraop $OMP_NUM_THREADS --interop $OMP_NUM_THREADS $HOROVOD
