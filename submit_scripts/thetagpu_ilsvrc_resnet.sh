@@ -1,5 +1,11 @@
 #!/bin/bash
+DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd -LP)
+# get home directory without symobolic links
+FULL_HOME=$( cd $HOME && pwd -LP)
+echo FULL_HOME=$FULL_HOME
+
 MPIPATH=/usr/mpi/gcc/openmpi-4.0.3rc4
+echo MPIPATH=$MPIPATH
 
 echo COBALT_NODEFILE=$COBALT_NODEFILE
 echo COBALT_JOBID=$COBALT_JOBID
@@ -11,7 +17,27 @@ echo PATH=$PATH
 
 NODES=`cat $COBALT_NODEFILE | wc -l`
 PPN=8
-PROCS=$((NODES * PPN))
+RANKS=$((NODES * PPN))
+echo NODES=$NODES  PPN=$PPN  RANKS=$RANKS
 
+EXEC=python
+if [ $RANKS -gt 1 ]; then
+   echo [$SECONDS] adding horovod with $RANKS ranks
+   HOROVOD=--horovod
+   EXEC="mpirun -n $RANKS -npernode $PPN -hostfile $COBALT_NODEFILE python"
+fi
+
+export SINGULARITYENV_LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda/compat/lib.real:/usr/local/cuda/extras/CUPTI/lib64:/usr/local/cuda/compat/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/.singularity.d/libs
+
+export OMP_NUM_THREADS=64
+#CONTAINER=/home/parton/tensorflow-20.08-tf2-py3.simg
+CONTAINER=/lus/theta-fs0/software/thetagpu/nvidia-containers/tensorflow2/tf2_20.10-py3.simg
 #HOSTS=$(cat $COBALT_NODEFILE | sed ':a;N;$!ba;s/\n/,/g')
-mpirun -hostfile $COBALT_NODEFILE -n $PROCS -npernode $PPN  singularity exec --nv -B /lus/theta-fs0/software/thetagpu -B /lus/theta-fs0/projects/datascience/parton/image_data:/projects/datascience/parton/image_data   /home/parton/tensorflow-20.08-tf2-py3.simg python /home/parton/git/tensorflow_skeleton/main.py -c /home/parton/git/tensorflow_skeleton/configs/ilsvrc.json --logdir logdir/$COBALT_JOBID --intraop 16 --interop 16 --horovod
+LOGDIR=$DIR/../logdir/$COBALT_JOBID/$(date +"%Y-%M-%d-%H")/cont
+mkdir -p $LOGDIR
+#export TF_ENABLE_AUTO_MIXED_PRECISION=1
+singularity exec --nv -B /lus/theta-fs0/software/thetagpu -B $FULL_HOME \
+   -B /lus/theta-fs0/projects/datascience/parton/image_data $CONTAINER \
+      $EXEC /home/parton/git/tensorflow_skeleton/main.py -c $DIR/../configs/ilsvrc.json \
+            --logdir $DIR/../$LOGDIR --intraop $OMP_NUM_THREADS --interop $OMP_NUM_THREADS \
+            $HOROVOD #--profiler --batch-term 50
