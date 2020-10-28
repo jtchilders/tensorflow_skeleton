@@ -147,8 +147,8 @@ def load_image_label_bb(image_path):
    # resize the image to the desired size.
    imgs = tf.image.resize(imgs, crop_size)
    # tf.print(image_path,label,labels_hash.lookup(label), output_stream=sys.stderr)
-   label = labels_hash.lookup(label)
-   labels = tf.fill([tf.shape(imgs)[0]],label)
+   hlabel = labels_hash.lookup(label)
+   labels = tf.fill([tf.shape(imgs)[0]],hlabel)
    return imgs, labels
 
 
