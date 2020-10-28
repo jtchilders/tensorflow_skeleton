@@ -3,6 +3,7 @@ logdir/
 *.output
 *.error
 *.env
+data_handler/?????
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
