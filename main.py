@@ -4,22 +4,20 @@ os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '3'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import numpy as np
 import tensorflow as tf
-from tensorflow.python.client import device_lib
+#from tensorflow.python.client import device_lib
 from tensorflow.keras.mixed_precision import experimental as mixed_precision
 import data_handler
 import model,lr_func,losses,accuracies
 
 logger = logging.getLogger(__name__)
 DEFAULT_CONFIG = 'config.json'
-DEFAULT_INTEROP = 1
-DEFAULT_INTRAOP = os.cpu_count()
+DEFAULT_INTEROP = int(os.cpu_count() / 4)
+DEFAULT_INTRAOP = int(os.cpu_count() / 4)
 DEFAULT_LOGDIR = '/tmp/tf-' + str(os.getpid())
 
-#os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
 def main():
    ''' simple starter program for tensorflow models. '''
-
    parser = argparse.ArgumentParser(description='')
    parser.add_argument('-c','--config',dest='config_filename',help='configuration filename in json format [default: %s]' % DEFAULT_CONFIG,default=DEFAULT_CONFIG)
    parser.add_argument('--interop',type=int,help='set Tensorflow "inter_op_parallelism_threads" session config varaible [default: %s]' % DEFAULT_INTEROP,default=DEFAULT_INTEROP)
@@ -39,10 +37,7 @@ def main():
    parser.add_argument('--warning', dest='warning', default=False, action='store_true', help="Set Logger to ERROR")
    parser.add_argument('--logfilename',dest='logfilename',default=None,help='if set, logging information will go to file')
    args = parser.parse_args()
-
-   tf.config.threading.set_inter_op_parallelism_threads(args.interop)
-   tf.config.threading.set_intra_op_parallelism_threads(args.intraop)
-
+   
    hvd = None
    rank = 0
    nranks = 1
@@ -59,8 +54,8 @@ def main():
       nranks = hvd.size()
       if rank > 0:
          logging_level = logging.WARNING
-      os.environ['CUDA_VISIBLE_DEVICES'] = str(hvd.local_rank())
-
+   
+      # Setup Logging
    if args.debug and not args.error and not args.warning:
       logging_level = logging.DEBUG
       os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '0'
@@ -74,39 +69,32 @@ def main():
                        format=logging_format,
                        datefmt=logging_datefmt,
                        filename=args.logfilename)
+   
    if hvd:
       logging.warning('rank: %5d   size: %5d  local rank: %5d  local size: %5d', hvd.rank(), hvd.size(),
                       hvd.local_rank(), hvd.local_size())
-
-   gpus = tf.config.experimental.list_physical_devices('GPU')
-   logger.info('gpus = %s',gpus)
-   if gpus:
-      try:
-         for gpu in gpus:
-            tf.config.experimental.set_memory_growth(gpu, True)
-      except RuntimeError as e:
-         # Visible devices must be set before GPUs have been initialized
-         raise
    
-   # setting mixed precision policy
-   # policy = mixed_precision.Policy(args.precision)
-   # mixed_precision.set_policy(policy)
+   tf.config.threading.set_inter_op_parallelism_threads(args.interop)
+   tf.config.threading.set_intra_op_parallelism_threads(args.intraop)
 
-   # logger.info('device_str:                 %s', device_str)
+   # Setup GPUs
+   gpus = tf.config.list_physical_devices('GPU')
+   logger.info(   'number of gpus:              %s',len(gpus))
+   for gpu in gpus:
+      tf.config.experimental.set_memory_growth(gpu, True)
+   if hvd:
+      tf.config.set_visible_devices(gpus[hvd.local_rank()],'GPU')
+   
 
-   if 'CUDA_VISIBLE_DEVICES' in os.environ:
-      logging.info('CUDA_VISIBLE_DEVICES=%s',os.environ['CUDA_VISIBLE_DEVICES'])
-      logging.debug(device_lib.list_local_devices())
-   else:
-      logging.info('CUDA_VISIBLE_DEVICES not defined in os.environ')
-   logging.info('using tensorflow version:   %s',tf.__version__)
-   logging.info('using tensorflow from:      %s',tf.__file__)
+   
+   logging.info(   'using tensorflow version:   %s',tf.__version__)
+   logging.info(   'using tensorflow from:      %s',tf.__file__)
    if hvd:
       logging.info('using horovod version:      %s',horovod.__version__)
       logging.info('using horovod from:         %s',horovod.__file__)
-   logging.info('logdir:                     %s',args.logdir)
-   logging.info('interop:                    %s',args.interop)
-   logging.info('intraop:                    %s',args.intraop)
+   logging.info(   'logdir:                     %s',args.logdir)
+   logging.info(   'interop:                    %s',args.interop)
+   logging.info(   'intraop:                    %s',args.intraop)
 
    config = json.load(open(args.config_filename))
    # config['device'] = device_str
@@ -117,9 +105,7 @@ def main():
    config['hvd'] = hvd
 
    trainds,testds = data_handler.get_datasets(config)
-   test_loss_metric = tf.keras.metrics.Mean(name='test_loss')
-   test_accuracy_metric = tf.keras.metrics.SparseCategoricalAccuracy(name='test_acc')
-
+   
    logger.info('get model')
    net = model.get_model(config)
 
@@ -137,14 +123,11 @@ def main():
    status_count = config['training']['status']
    batch_size = config['data']['batch_size']
    for epoch_num in range(config['training']['epochs']):
-      # Reset the metrics at the start of the next epoch
-      test_loss_metric.reset_states()
-      test_accuracy_metric.reset_states()
-
+      
       train_loss_metric = 0
       train_accuracy_metric = 0
 
-      logger.info(f'begin epoch {epoch_num}')
+      logger.info('begin epoch %s',epoch_num)
 
       batch_num = 0
       start = time.time()
@@ -179,7 +162,8 @@ def main():
                 img_per_sec_std = np.std(partial_img_rate[partial_img_rate>0])
             loss = train_loss_metric / status_count
             acc = (train_accuracy_metric / status_count)[0]
-            logger.info(f' [{epoch_num:5d}:{batch_num:5d}]: loss = {loss:10.5f} acc = {acc:10.5f}  imgs/sec = {img_per_sec:7.1f} +/- {img_per_sec_std:7.1f}')
+            logger.info(" [%5d:%5d]: loss = %10.5f acc = %10.5f  imgs/sec = %7.1f +/- %7.1f",
+                           epoch_num,batch_num,loss.numpy(),acc.numpy(),img_per_sec,img_per_sec_std)
             if rank == 0:
                with train_summary_writer.as_default():
                   step = epoch_num * batches_per_epoch + batch_num
@@ -200,16 +184,30 @@ def main():
                tf.profiler.experimental.stop()
             exit = True
             break
+         # for testing
+         # if batch_num == 20: break
       if exit:
          break
       batches_per_epoch = batch_num
-      logger.info(f'batches_per_epoch = {batches_per_epoch}')
+      logger.info('batches_per_epoch = %s',batches_per_epoch)
       
+      test_loss_metric = 0.
+      test_accuracy_metric = 0.
       for test_num,(test_inputs, test_labels) in enumerate(testds):
-         test_step(net,loss_func,test_inputs, test_labels,test_loss_metric,test_accuracy_metric)
+         #logger.info("test_inputs shape: %s test_labels shape: %s",test_inputs.shape,test_labels.shape)
+         loss_value,pred = test_step(net,loss_func,test_inputs, test_labels)
+         #logger.info("loss_value shape: %s pred shape: %s",loss_value.shape,pred.shape)
+         #logger.info("loss_value: %s  pred: %s pred_label: %s",loss_value,tf.argmax(tf.nn.softmax(pred,-1),-1)[0:10],test_labels[0:10])
+
+         test_loss_metric += tf.reduce_mean(loss_value)
+         test_accuracy_metric += tf.divide(tf.reduce_sum(tf.cast(tf.equal(tf.argmax(pred,-1,tf.int32),tf.cast(test_labels,tf.int32)),tf.int32)),tf.shape(test_labels,tf.int32))
+
+         test_loss = test_loss_metric / test_num
+         test_accuracy = test_accuracy_metric / test_num
 
          if (test_num + 1) % status_count == 0:
-            logger.info(f' [{epoch_num:5d}:{test_num:5d}]: test loss = {test_loss_metric.result():10.5f}  test acc = {test_accuracy_metric.result():10.5f}')
+            logger.info(' [%5d:%5d]: test loss = %10.5f  test acc = %10.5f',
+                         epoch_num,test_num,test_loss,test_accuracy)
 
       # test_loss = tf.constant(test_loss_metric.result())
       # test_acc = tf.constant(test_accuracy_metric.result())
@@ -218,16 +216,16 @@ def main():
 
       if rank == 0:
          with test_summary_writer.as_default():
-            tf.summary.scalar('loss', test_loss_metric.result(), step=epoch_num * batches_per_epoch + batch_num)
-            tf.summary.scalar('accuracy', test_accuracy_metric.result(), step=epoch_num * batches_per_epoch + batch_num)
+            tf.summary.scalar('loss', test_loss, step=epoch_num * batches_per_epoch + batch_num)
+            tf.summary.scalar('accuracy', test_accuracy[0], step=epoch_num * batches_per_epoch + batch_num)
          ave_img_rate = image_rate_sum / image_rate_n
          std_img_rate = np.sqrt((1/image_rate_n) * image_rate_sum2 - ave_img_rate*ave_img_rate)
          template = 'Epoch {:10.5f}, Loss: {:10.5f}, Accuracy: {:10.5f}, Test Loss: {:10.5f}, Test Accuracy: {:10.5f} Average Image Rate: {:10.5f} +/- {:10.5f}'
          logger.info(template.format(epoch_num + 1,
                                loss,
                                acc * 100,
-                               test_loss_metric.result(),
-                               test_accuracy_metric.result() * 100,
+                               test_loss,
+                               test_accuracy[0] * 100,
                                ave_img_rate,
                                std_img_rate))
 
@@ -258,15 +256,15 @@ def train_step(net,loss_func,opt,inputs,labels,first_batch=False,hvd=None,root_r
 
 
 @tf.function
-def test_step(net,loss_func,inputs,labels,loss_metric,acc_metric):
+def test_step(net,loss_func,inputs,labels):
   # training=False is only needed if there are layers with different
   # behavior during training versus inference (e.g. Dropout).
-  predictions = net(inputs, training=False)
-  loss_value = loss_func(labels, tf.cast(predictions,tf.float32))
+  pred = net(inputs, training=False)
+  #tf.print(pred)
+  loss_value = loss_func(labels, tf.cast(pred,tf.float32))
   # tf.print(tf.math.reduce_sum(inputs),tf.argmax(tf.nn.softmax(predictions,-1),-1),labels,loss_value)
 
-  loss_metric(loss_value)
-  acc_metric(labels, predictions)
+  return loss_value,pred
 
 
 
@@ -278,12 +276,12 @@ def get_optimizer(config):
       lrs_name = config['lr_schedule']['name']
       lrs_args = config['lr_schedule'].get('args',None)
       if hasattr(tf.keras.optimizers.schedules, lrs_name):
-         logger.info(f'using learning rate schedule {lrs_name}')
+         logger.info('using learning rate schedule %s', lrs_name)
          lr_schedule = getattr(tf.keras.optimizers.schedules, lrs_name)
          if lrs_args:
             lr_schedule = lr_schedule(**lrs_args)
          else:
-            raise Exception(f'missing args for learning rate schedule {lrs_name}')
+            raise Exception('missing args for learning rate schedule %s',lrs_name)
 
    opt_name = config['optimizer']['name']
    opt_args = config['optimizer'].get('args',None)
@@ -296,7 +294,7 @@ def get_optimizer(config):
       else:
          return getattr(tf.keras.optimizers, opt_name)()
    else:
-      raise Exception(f'could not locate optimizer {opt_name}')
+      raise Exception('could not locate optimizer %s',opt_name)
 
 
 if __name__ == "__main__":
