@@ -82,12 +82,12 @@ def main():
    logger.info(   'number of gpus:              %s',len(gpus))
    for gpu in gpus:
       tf.config.experimental.set_memory_growth(gpu, True)
-   if hvd:
-      tf.config.set_visible_devices(gpus[hvd.local_rank()],'GPU')
+   if hvd and len(gpus) > 0:
+      tf.config.set_visible_devices(gpus[hvd.local_rank() % len(gpus)],'GPU')
    
 
    
-   logging.info(   'using tensorflow version:   %s',tf.__version__)
+   logging.info(   'using tensorflow version:   %s (%s)',tf.__version__,tf.__git_version__)
    logging.info(   'using tensorflow from:      %s',tf.__file__)
    if hvd:
       logging.info('using horovod version:      %s',horovod.__version__)
@@ -152,14 +152,14 @@ def main():
          if batch_num % status_count == 0:
             img_per_sec = status_count * batch_size * nranks / (time.time() - start)
             img_per_sec_std = 0
-            if batch_num > 1:
-                image_rate_n += 1
-                image_rate_sum += img_per_sec
-                image_rate_sum2 += img_per_sec * img_per_sec
-                partial_img_rate[partial_img_rate_counter % 10] = img_per_sec
-                partial_img_rate_counter += 1
-                img_per_sec = np.mean(partial_img_rate[partial_img_rate>0])
-                img_per_sec_std = np.std(partial_img_rate[partial_img_rate>0])
+            if batch_num > 10:
+               image_rate_n += 1
+               image_rate_sum += img_per_sec
+               image_rate_sum2 += img_per_sec * img_per_sec
+               partial_img_rate[partial_img_rate_counter % 10] = img_per_sec
+               partial_img_rate_counter += 1
+               img_per_sec = np.mean(partial_img_rate[partial_img_rate>0])
+               img_per_sec_std = np.std(partial_img_rate[partial_img_rate>0])
             loss = train_loss_metric / status_count
             acc = (train_accuracy_metric / status_count)[0]
             logger.info(" [%5d:%5d]: loss = %10.5f acc = %10.5f  imgs/sec = %7.1f +/- %7.1f",
@@ -188,8 +188,11 @@ def main():
          # if batch_num == 20: break
       if exit:
          break
-      batches_per_epoch = batch_num
-      logger.info('batches_per_epoch = %s',batches_per_epoch)
+      if rank == 0:
+         batches_per_epoch = batch_num
+         ave_img_rate = image_rate_sum / image_rate_n
+         std_img_rate = np.sqrt((1/image_rate_n) * image_rate_sum2 - ave_img_rate*ave_img_rate)
+         logger.info('batches_per_epoch = %s  Ave Img Rate: %10.5f +/- %10.5f',batches_per_epoch,ave_img_rate,std_img_rate)
       
       test_loss_metric = 0.
       test_accuracy_metric = 0.
@@ -249,6 +252,7 @@ def train_step(net,loss_func,opt,inputs,labels,first_batch=False,hvd=None,root_r
    if hvd and first_batch:
       hvd.broadcast_variables(net.variables, root_rank=root_rank)
       hvd.broadcast_variables(opt.variables(), root_rank=root_rank)
+      
 
    # tf.print(tf.argmax(tf.nn.softmax(pred,-1),-1),labels)
 

@@ -66,13 +66,14 @@ def build_dataset_from_filelist(config,filelist_filename):
    # ds = filelist.map(load_image_and_label, num_parallel_calls=tf.data.experimental.AUTOTUNE)  # num_parallel_calls=dc['num_parallel_readers']) #
    ds = filelist.map(load_image_label_bb,
                      num_parallel_calls=tf.data.experimental.AUTOTUNE)  # dc['num_parallel_readers']) #
+   
+   # how many inputs to prefetch to improve pipeline performance
+   ds = ds.prefetch(buffer_size= tf.data.experimental.AUTOTUNE)  #dc['prefectch_buffer_size']) #
+
    ds = ds.apply(tf.data.Dataset.unbatch)
 
    # batch the data
    ds = ds.batch(dc['batch_size']) 
-
-   # how many inputs to prefetch to improve pipeline performance
-   ds = ds.prefetch(buffer_size= tf.data.experimental.AUTOTUNE)  #dc['prefectch_buffer_size']) #
 
    return ds
 

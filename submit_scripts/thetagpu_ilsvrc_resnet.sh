@@ -32,12 +32,19 @@ export SINGULARITYENV_LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda/comp
 export OMP_NUM_THREADS=64
 #CONTAINER=/home/parton/tensorflow-20.08-tf2-py3.simg
 CONTAINER=/lus/theta-fs0/software/thetagpu/nvidia-containers/tensorflow2/tf2_20.10-py3.simg
+#CONTAINER=/lus/theta-fs0/projects/datascience/parton/thetagpu/singularity/tf2/tf2_20.10-py3_imagenet.simg
+#CONTAINER=/raid/scratch/tf2_20.10-py3_imagenet.simg
 #HOSTS=$(cat $COBALT_NODEFILE | sed ':a;N;$!ba;s/\n/,/g')
-LOGDIR=$DIR/../logdir/$COBALT_JOBID/$(date +"%Y-%M-%d-%H")/cont
+LOGDIR=$DIR/../logdir/$COBALT_JOBID/$(date +"%Y-%m-%d-%H-%M")/cont
 mkdir -p $LOGDIR
+echo LOGDIR=$LOGDIR
+cp $0 $LOGDIR/
 #export TF_ENABLE_AUTO_MIXED_PRECISION=1
+export TF_XLA_FLAGS=--tf_xla_auto_jit=1
+export TF_XLA_FLAGS=--tf_xla_auto_jit=fusible
 singularity exec --nv -B /lus/theta-fs0/software/thetagpu -B $FULL_HOME \
-   -B /lus/theta-fs0/projects/datascience/parton/image_data $CONTAINER \
+   -B /lus/theta-fs0/projects/datascience/parton/ \
+   -B /lus/theta-fs0/software/datascience/ $CONTAINER \
       $EXEC /home/parton/git/tensorflow_skeleton/main.py -c $DIR/../configs/ilsvrc.json \
             --logdir $DIR/../$LOGDIR --intraop $OMP_NUM_THREADS --interop $OMP_NUM_THREADS \
-            $HOROVOD #--profiler --batch-term 50
+            $HOROVOD  > $LOGDIR/output.txt 2>&1 #--profiler --batch-term 50
