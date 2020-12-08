@@ -1,10 +1,6 @@
 #!/bin/bash
+#COBALT -O logdir/$COBALT_JOBID
 
-#MCONDA=/lus/theta-fs0/projects/datascience/parton/thetagpu/tf-build
-#MCONDA=/lus/theta-fs0/projects/datascience/parton/thetagpu/tf-hvd-no-nccl/tf-intall/mconda3
-#MCONDA=/lus/theta-fs0/projects/datascience/parton/thetagpu/tf-build3/tf-intall/mconda3
-#source /lus/theta-fs0/projects/datascience/parton/thetagpu/tf-build/miniconda3/latest/setup.sh
-#MCONDA=/lus/theta-fs0/software/thetagpu/conda/tf_master/2020-11/mconda3
 MCONDA=/lus/theta-fs0/software/thetagpu/conda/tf_master/2020-11-11/mconda3
 source $MCONDA/setup.sh
 
@@ -31,5 +27,6 @@ cp $0 $LOGDIR/
 #export TF_ENABLE_AUTO_MIXED_PRECISION=1
 #export TF_XLA_FLAGS=--tf_xla_auto_jit=1
 #export TF_XLA_FLAGS=--tf_xla_auto_jit=fusible
+$EXEC -c 'import os;print(os.environ["PATH"])'
 $EXEC main.py -c configs/ilsvrc.json --interop $OMP_NUM_THREADS --intraop $OMP_NUM_THREADS \
-   --logdir $LOGDIR $HOROVOD --profiler --batch-term 50 > $LOGDIR/output.txt 2>&1 #--profiler --batch-term 50
+   --logdir $LOGDIR $HOROVOD --profiler --batch-term 50 
